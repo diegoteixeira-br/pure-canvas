@@ -196,6 +196,20 @@ export function ProductFormModal({ open, onOpenChange, product }: ProductFormMod
               />
             </div>
 
+            {(() => {
+              const costPrice = Number(form.watch("cost_price"));
+              const salePrice = Number(form.watch("sale_price"));
+              if (!costPrice || !salePrice) return null;
+              const margin = ((salePrice - costPrice) / costPrice) * 100;
+              const color = margin >= 30 ? "text-green-400" : margin >= 10 ? "text-yellow-400" : "text-red-400";
+              return (
+                <div className={`text-sm font-medium ${color} flex items-center gap-1`}>
+                  Margem de Lucro: {margin.toFixed(1)}%
+                  {margin < 0 && <span className="text-xs">(prejuízo)</span>}
+                </div>
+              );
+            })()}
+
             <FormField
               control={form.control}
               name="min_stock_alert"
