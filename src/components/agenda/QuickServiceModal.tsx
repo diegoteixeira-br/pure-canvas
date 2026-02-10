@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -31,7 +31,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import type { Barber } from "@/hooks/useBarbers";
 import type { Service } from "@/hooks/useServices";
-import { Zap, CalendarClock } from "lucide-react";
+import { Zap, CalendarClock, Split } from "lucide-react";
 
 const formSchema = z.object({
   client_name: z.string().min(1, "Nome do cliente é obrigatório"),
@@ -83,6 +83,12 @@ export function QuickServiceModal({
   onSubmit,
   isLoading,
 }: QuickServiceModalProps) {
+  const [isSplit, setIsSplit] = useState(false);
+  const [splitMethod1, setSplitMethod1] = useState("cash");
+  const [splitMethod2, setSplitMethod2] = useState("pix");
+  const [splitAmount1, setSplitAmount1] = useState(0);
+  const [splitAmount2, setSplitAmount2] = useState(0);
+
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -142,10 +148,31 @@ export function QuickServiceModal({
         scheduled_time: now,
         payment_method: "",
       });
+      setIsSplit(false);
+      setSplitMethod1("cash");
+      setSplitMethod2("pix");
+      setSplitAmount1(0);
+      setSplitAmount2(0);
     }
   }, [open, form, activeBarbers]);
 
+  const totalPrice = form.watch("total_price");
+
+  const PAYMENT_METHODS = [
+    { value: "cash", label: "💵 Dinheiro" },
+    { value: "pix", label: "📱 PIX" },
+    { value: "debit_card", label: "💳 Débito" },
+    { value: "credit_card", label: "💳 Crédito" },
+  ];
+
+  const splitValid = isSplit && splitAmount1 > 0 && splitAmount2 > 0 && 
+    Math.abs(splitAmount1 + splitAmount2 - totalPrice) < 0.01 && 
+    splitMethod1 !== splitMethod2;
+
   const handleSubmit = async (data: FormData) => {
+    if (isSplit && !data.schedule_later) {
+      data.payment_method = `${splitMethod1}:${splitAmount1.toFixed(2)}|${splitMethod2}:${splitAmount2.toFixed(2)}`;
+    }
     await onSubmit(data);
     onOpenChange(false);
   };
@@ -283,7 +310,7 @@ export function QuickServiceModal({
                 />
 
                 {/* Payment Method - Only show when NOT scheduling for later */}
-                {!scheduleLater && (
+                {!scheduleLater && !isSplit && (
                   <FormField
                     control={form.control}
                     name="payment_method"
@@ -297,16 +324,97 @@ export function QuickServiceModal({
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="cash">💵 Dinheiro</SelectItem>
-                            <SelectItem value="pix">📱 PIX</SelectItem>
-                            <SelectItem value="debit_card">💳 Débito</SelectItem>
-                            <SelectItem value="credit_card">💳 Crédito</SelectItem>
+                            {PAYMENT_METHODS.map(m => (
+                              <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
+                )}
+
+                {/* Split Payment UI */}
+                {!scheduleLater && isSplit && (
+                  <div className="space-y-3">
+                    <FormLabel>Pagamento Dividido</FormLabel>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Select value={splitMethod1} onValueChange={setSplitMethod1}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {PAYMENT_METHODS.filter(m => m.value !== splitMethod2).map(m => (
+                            <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={splitAmount1 || ""}
+                        placeholder="R$ 0,00"
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value) || 0;
+                          setSplitAmount1(val);
+                          setSplitAmount2(Math.max(0, +(totalPrice - val).toFixed(2)));
+                        }}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Select value={splitMethod2} onValueChange={setSplitMethod2}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {PAYMENT_METHODS.filter(m => m.value !== splitMethod1).map(m => (
+                            <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={splitAmount2 || ""}
+                        placeholder="R$ 0,00"
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value) || 0;
+                          setSplitAmount2(val);
+                          setSplitAmount1(Math.max(0, +(totalPrice - val).toFixed(2)));
+                        }}
+                      />
+                    </div>
+                    {isSplit && splitAmount1 > 0 && splitAmount2 > 0 && Math.abs(splitAmount1 + splitAmount2 - totalPrice) >= 0.01 && (
+                      <p className="text-xs text-destructive">
+                        A soma (R$ {(splitAmount1 + splitAmount2).toFixed(2)}) deve ser igual ao total (R$ {totalPrice.toFixed(2)})
+                      </p>
+                    )}
+                    {splitMethod1 === splitMethod2 && (
+                      <p className="text-xs text-destructive">Os métodos devem ser diferentes</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Toggle dividir pagamento */}
+                {!scheduleLater && totalPrice > 0 && (
+                  <div className="flex items-center justify-between rounded-lg border p-3">
+                    <div className="flex items-center gap-2">
+                      <Split className="h-4 w-4 text-muted-foreground" />
+                      <Label htmlFor="split-payment" className="text-sm">Dividir Pagamento</Label>
+                    </div>
+                    <Switch
+                      id="split-payment"
+                      checked={isSplit}
+                      onCheckedChange={(checked) => {
+                        setIsSplit(checked);
+                        if (checked) {
+                          const half = +(totalPrice / 2).toFixed(2);
+                          setSplitAmount1(half);
+                          setSplitAmount2(+(totalPrice - half).toFixed(2));
+                          form.setValue("payment_method", "split");
+                        } else {
+                          form.setValue("payment_method", "");
+                        }
+                      }}
+                    />
+                  </div>
                 )}
 
                 {/* Toggle para agendar */}
@@ -393,7 +501,7 @@ export function QuickServiceModal({
               >
                 Cancelar
               </Button>
-              <Button type="submit" disabled={isLoading}>
+              <Button type="submit" disabled={isLoading || (isSplit && !scheduleLater && !splitValid)}>
                 {isLoading ? "Salvando..." : scheduleLater ? "Agendar Serviço" : "Lançar Atendimento"}
               </Button>
             </div>
