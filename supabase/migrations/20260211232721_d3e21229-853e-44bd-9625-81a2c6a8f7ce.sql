@@ -1,0 +1,1 @@
+INSERT INTO public.saas_settings (id) VALUES (gen_random_uuid()) ON CONFLICT DO NOTHING;
