@@ -4,7 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit, Trash2, DollarSign, Users, TrendingUp, AlertCircle, Copy, FileText, Eye, Send } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Plus, Edit, Trash2, DollarSign, Users, TrendingUp, AlertCircle, Copy, FileText, Eye, Send, Save, Loader2 } from "lucide-react";
 import { useInfluencerPartnerships, useInfluencerPayments, useMRR, useInfluencerTermTemplate, InfluencerPartnership } from "@/hooks/useInfluencerPartnerships";
 import { InfluencerFormModal } from "@/components/admin/InfluencerFormModal";
 import { InfluencerPaymentModal } from "@/components/admin/InfluencerPaymentModal";
@@ -25,8 +28,13 @@ const statusMap: Record<string, { label: string; variant: "default" | "secondary
 
 export default function AdminInfluencers() {
   const { partnershipsQuery, createPartnership, updatePartnership, deletePartnership } = useInfluencerPartnerships();
-  const { data: termTemplate } = useInfluencerTermTemplate();
+  const termTemplateQuery = useInfluencerTermTemplate();
+  const termTemplate = termTemplateQuery.data;
   const { data: mrr } = useMRR();
+  const [termEditorOpen, setTermEditorOpen] = useState(false);
+  const [editTitle, setEditTitle] = useState("");
+  const [editVersion, setEditVersion] = useState("");
+  const [editContent, setEditContent] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<InfluencerPartnership | null>(null);
   const [paymentOpen, setPaymentOpen] = useState(false);
@@ -94,9 +102,21 @@ export default function AdminInfluencers() {
             <h1 className="text-2xl font-bold text-white">Influenciadores</h1>
             <p className="text-slate-400">Gerencie parcerias e comissões de influenciadores</p>
           </div>
-          <Button onClick={() => { setEditing(null); setFormOpen(true); }}>
-            <Plus className="h-4 w-4 mr-2" /> Novo Influenciador
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" className="border-slate-600 text-slate-300" onClick={() => {
+              if (termTemplate) {
+                setEditTitle(termTemplate.title);
+                setEditVersion(termTemplate.version);
+                setEditContent(termTemplate.content);
+              }
+              setTermEditorOpen(!termEditorOpen);
+            }}>
+              <FileText className="h-4 w-4 mr-2" /> {termEditorOpen ? "Fechar Editor" : "Editar Termo"}
+            </Button>
+            <Button onClick={() => { setEditing(null); setFormOpen(true); }}>
+              <Plus className="h-4 w-4 mr-2" /> Novo Influenciador
+            </Button>
+          </div>
         </div>
 
         {/* KPI Cards */}
@@ -138,6 +158,74 @@ export default function AdminInfluencers() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Term Editor */}
+        {termEditorOpen && termTemplate && (
+          <Card className="bg-slate-800 border-slate-700">
+            <CardHeader>
+              <CardTitle className="text-white flex items-center gap-2">
+                <FileText className="h-5 w-5 text-orange-400" />
+                Editar Termo de Parceria
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-slate-300">Título</Label>
+                  <Input
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    className="bg-slate-700 border-slate-600 text-white"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-slate-300">Versão</Label>
+                  <Input
+                    value={editVersion}
+                    onChange={(e) => setEditVersion(e.target.value)}
+                    className="bg-slate-700 border-slate-600 text-white"
+                    placeholder="Ex: 2.1"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-slate-300">
+                  Conteúdo do Termo
+                  <span className="text-xs text-slate-500 ml-2">
+                    Variáveis: {"{NOME_INFLUENCIADOR}"}, {"{PERCENTUAL}"}, {"{DATA}"}
+                  </span>
+                </Label>
+                <Textarea
+                  value={editContent}
+                  onChange={(e) => setEditContent(e.target.value)}
+                  className="bg-slate-700 border-slate-600 text-white min-h-[300px] font-mono text-sm"
+                  placeholder="Conteúdo do termo de parceria..."
+                />
+              </div>
+              <div className="flex justify-end">
+                <Button
+                  onClick={() => {
+                    termTemplateQuery.updateTemplate.mutate({
+                      id: termTemplate.id,
+                      title: editTitle,
+                      content: editContent,
+                      version: editVersion,
+                    });
+                  }}
+                  disabled={termTemplateQuery.updateTemplate.isPending}
+                  className="bg-orange-600 hover:bg-orange-700"
+                >
+                  {termTemplateQuery.updateTemplate.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4 mr-2" />
+                  )}
+                  Salvar Termo
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Influencers Table */}
         <Card className="bg-slate-800 border-slate-700">

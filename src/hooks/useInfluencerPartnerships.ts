@@ -184,7 +184,9 @@ export function useMRR() {
 }
 
 export function useInfluencerTermTemplate() {
-  return useQuery({
+  const queryClient = useQueryClient();
+
+  const query = useQuery({
     queryKey: ["influencer-term-template"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -198,6 +200,28 @@ export function useInfluencerTermTemplate() {
       return data as unknown as { id: string; title: string; content: string; version: string } | null;
     },
   });
+
+  const updateTemplate = useMutation({
+    mutationFn: async ({ id, title, content, version }: { id: string; title: string; content: string; version: string }) => {
+      const { data, error } = await supabase
+        .from("influencer_term_templates" as any)
+        .update({ title, content, version, updated_at: new Date().toISOString() })
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["influencer-term-template"] });
+      toast({ title: "Termo atualizado com sucesso!" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Erro ao atualizar termo", description: error.message, variant: "destructive" });
+    },
+  });
+
+  return { ...query, updateTemplate };
 }
 
 // Calculate commission based on linked leads' payments
