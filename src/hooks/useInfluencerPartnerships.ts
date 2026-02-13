@@ -8,6 +8,7 @@ export interface InfluencerPartnership {
   email: string | null;
   phone: string | null;
   instagram_handle: string | null;
+  referral_code: string;
   commission_percent: number;
   status: string;
   started_at: string;

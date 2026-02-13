@@ -4,13 +4,16 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit, Trash2, DollarSign, Users, TrendingUp, AlertCircle } from "lucide-react";
+import { Plus, Edit, Trash2, DollarSign, Users, TrendingUp, AlertCircle, Copy } from "lucide-react";
 import { useInfluencerPartnerships, useInfluencerPayments, useMRR, InfluencerPartnership } from "@/hooks/useInfluencerPartnerships";
 import { InfluencerFormModal } from "@/components/admin/InfluencerFormModal";
 import { InfluencerPaymentModal } from "@/components/admin/InfluencerPaymentModal";
 import { InfluencerPaymentsTable } from "@/components/admin/InfluencerPaymentsTable";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
+import { toast } from "@/hooks/use-toast";
 
 const statusMap: Record<string, { label: string; variant: "default" | "secondary" | "destructive" }> = {
   active: { label: "Ativo", variant: "default" },
@@ -29,6 +32,28 @@ export default function AdminInfluencers() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [markPaidMethod, setMarkPaidMethod] = useState("pix");
   const [markPaidId, setMarkPaidId] = useState<string | null>(null);
+  const siteUrl = window.location.origin;
+
+  // Query companies linked to influencers
+  const { data: linkedCompanies } = useQuery({
+    queryKey: ["influencer-linked-companies"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("companies")
+        .select("id, name, signup_source, created_at, plan_status")
+        .like("signup_source", "inf:%");
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const getLinkedCount = (code: string) => 
+    (linkedCompanies || []).filter(c => c.signup_source === `inf:${code}`).length;
+
+  const copyLink = (code: string) => {
+    navigator.clipboard.writeText(`${siteUrl}/auth?tab=signup&ref=${code}`);
+    toast({ title: "Link copiado!" });
+  };
 
   const { paymentsQuery, createPayment, markAsPaid } = useInfluencerPayments(selectedId || undefined);
 
@@ -111,6 +136,8 @@ export default function AdminInfluencers() {
                   <TableHead className="text-slate-300">Nome</TableHead>
                   <TableHead className="text-slate-300">Instagram</TableHead>
                   <TableHead className="text-slate-300">Comissão</TableHead>
+                  <TableHead className="text-slate-300">Leads</TableHead>
+                  <TableHead className="text-slate-300">Link</TableHead>
                   <TableHead className="text-slate-300">Status</TableHead>
                   <TableHead className="text-slate-300">Ações</TableHead>
                 </TableRow>
@@ -123,6 +150,14 @@ export default function AdminInfluencers() {
                       <TableCell className="text-white font-medium">{inf.name}</TableCell>
                       <TableCell className="text-slate-300">{inf.instagram_handle || "—"}</TableCell>
                       <TableCell className="text-slate-300">{inf.commission_percent}%</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{getLinkedCount(inf.referral_code)} leads</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Button size="sm" variant="ghost" className="text-blue-400 text-xs" onClick={(e) => { e.stopPropagation(); copyLink(inf.referral_code); }}>
+                          <Copy className="h-3 w-3 mr-1" /> Copiar
+                        </Button>
+                      </TableCell>
                       <TableCell><Badge variant={s.variant}>{s.label}</Badge></TableCell>
                       <TableCell>
                         <div className="flex gap-1" onClick={e => e.stopPropagation()}>
@@ -142,7 +177,7 @@ export default function AdminInfluencers() {
                 })}
                 {!influencers.length && (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-slate-400 py-8">
+                    <TableCell colSpan={7} className="text-center text-slate-400 py-8">
                       Nenhum influenciador cadastrado
                     </TableCell>
                   </TableRow>

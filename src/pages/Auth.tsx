@@ -229,7 +229,7 @@ export default function Auth() {
         if (companyError) {
           console.error("Error creating company:", companyError);
         } else {
-          // Handle referral code after company creation
+          // Handle referral/influencer code after company creation
           const savedRefCode = localStorage.getItem("referral_code");
           if (savedRefCode) {
             try {
@@ -241,11 +241,19 @@ export default function Auth() {
                 .maybeSingle();
 
               if (newCompany) {
-                // Use SECURITY DEFINER function to process referral (bypasses RLS)
-                await supabase.rpc("process_referral_signup", {
-                  p_referred_company_id: newCompany.id,
-                  p_referral_code: savedRefCode,
-                });
+                if (savedRefCode.startsWith("INF_")) {
+                  // Influencer referral - store as inf:CODE in signup_source
+                  await supabase
+                    .from("companies")
+                    .update({ signup_source: `inf:${savedRefCode}` })
+                    .eq("id", newCompany.id);
+                } else {
+                  // Regular referral - use SECURITY DEFINER function
+                  await supabase.rpc("process_referral_signup", {
+                    p_referred_company_id: newCompany.id,
+                    p_referral_code: savedRefCode,
+                  });
+                }
               }
             } catch (refErr) {
               console.error("Error processing referral:", refErr);
