@@ -19,7 +19,7 @@ export default function Financeiro() {
   const { isBarber } = useBarberAuth();
   const isDeletionPasswordActive = !!settings?.deletion_password_enabled && !!settings?.deletion_password_hash;
 
-  // If barber (partner), default to commission tab; otherwise cash-flow
+  // Barbers always start on commission and can only see commission
   const defaultTab = isBarber ? "commission" : "cash-flow";
 
   const [activeTab, setActiveTab] = useState(defaultTab);
@@ -27,10 +27,13 @@ export default function Financeiro() {
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [pendingTab, setPendingTab] = useState<string | null>(null);
 
-  // If password not active or user is not owner, unlock everything
+  // Owner with password active needs to unlock protected tabs
   const needsPassword = isDeletionPasswordActive && !isBarber;
 
   const handleTabChange = (tab: string) => {
+    // Barbers can only access commission
+    if (isBarber && PROTECTED_TABS.includes(tab)) return;
+
     if (needsPassword && PROTECTED_TABS.includes(tab) && !unlockedTabs.has(tab)) {
       setPendingTab(tab);
       setPasswordDialogOpen(true);
@@ -39,8 +42,6 @@ export default function Financeiro() {
     }
   };
 
-  // For barbers, if they try to access protected tabs without password, block
-  // Actually barbers only see commission, but if owner has password active, protect the rest
   const isTabLocked = (tab: string) => {
     return needsPassword && PROTECTED_TABS.includes(tab) && !unlockedTabs.has(tab);
   };
@@ -55,26 +56,34 @@ export default function Financeiro() {
 
         <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
           <TabsList className="bg-muted">
-            <TabsTrigger value="cash-flow" className="flex items-center gap-2">
-              {isTabLocked("cash-flow") ? <Lock className="h-4 w-4" /> : <DollarSign className="h-4 w-4" />}
-              Fluxo de Caixa
-            </TabsTrigger>
-            <TabsTrigger value="expenses" className="flex items-center gap-2">
-              {isTabLocked("expenses") ? <Lock className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
-              Despesas
-            </TabsTrigger>
-            <TabsTrigger value="inventory" className="flex items-center gap-2">
-              {isTabLocked("inventory") ? <Lock className="h-4 w-4" /> : <Package className="h-4 w-4" />}
-              Estoque
-            </TabsTrigger>
+            {!isBarber && (
+              <TabsTrigger value="cash-flow" className="flex items-center gap-2">
+                {isTabLocked("cash-flow") ? <Lock className="h-4 w-4" /> : <DollarSign className="h-4 w-4" />}
+                Fluxo de Caixa
+              </TabsTrigger>
+            )}
+            {!isBarber && (
+              <TabsTrigger value="expenses" className="flex items-center gap-2">
+                {isTabLocked("expenses") ? <Lock className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+                Despesas
+              </TabsTrigger>
+            )}
+            {!isBarber && (
+              <TabsTrigger value="inventory" className="flex items-center gap-2">
+                {isTabLocked("inventory") ? <Lock className="h-4 w-4" /> : <Package className="h-4 w-4" />}
+                Estoque
+              </TabsTrigger>
+            )}
             <TabsTrigger value="commission" className="flex items-center gap-2">
               <FileText className="h-4 w-4" />
               Comissões
             </TabsTrigger>
-            <TabsTrigger value="courtesy" className="flex items-center gap-2">
-              {isTabLocked("courtesy") ? <Lock className="h-4 w-4" /> : <Gift className="h-4 w-4" />}
-              Cortesias
-            </TabsTrigger>
+            {!isBarber && (
+              <TabsTrigger value="courtesy" className="flex items-center gap-2">
+                {isTabLocked("courtesy") ? <Lock className="h-4 w-4" /> : <Gift className="h-4 w-4" />}
+                Cortesias
+              </TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="cash-flow" className="mt-6">
