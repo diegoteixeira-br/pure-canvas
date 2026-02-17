@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,8 @@ import {
 } from "lucide-react";
 import { usePartnershipTerms, useTermAcceptances } from "@/hooks/usePartnershipTerms";
 import { useCompany } from "@/hooks/useCompany";
+import { useBusinessSettings } from "@/hooks/useBusinessSettings";
+import { DeletionPasswordDialog } from "@/components/shared/DeletionPasswordDialog";
 import {
   Dialog,
   DialogContent,
@@ -75,14 +77,33 @@ export function PartnershipTermsTab() {
   const { terms, activeTerm, isLoading, createTerm, activateTerm, deleteTerm } = usePartnershipTerms(company?.id || null);
   const { acceptances } = useTermAcceptances(company?.id || null);
 
+  const { settings, verifyDeletionPassword } = useBusinessSettings();
+
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [showAcceptancesModal, setShowAcceptancesModal] = useState(false);
   const [previewTerm, setPreviewTerm] = useState<typeof terms[0] | null>(null);
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
   const [newVersion, setNewVersion] = useState("");
   const [newTitle, setNewTitle] = useState("Termos de Parceria e Normas de Conduta");
   const [newContent, setNewContent] = useState(DEFAULT_TERM_TEMPLATE);
+
+  const isDeletionPasswordActive = !!settings?.deletion_password_enabled && !!settings?.deletion_password_hash;
+
+  const requirePassword = useCallback((action: () => void) => {
+    if (isDeletionPasswordActive) {
+      setPendingAction(() => action);
+      setPasswordDialogOpen(true);
+    } else {
+      action();
+    }
+  }, [isDeletionPasswordActive]);
+
+  const handleCreateWithPassword = () => {
+    requirePassword(() => setShowCreateModal(true));
+  };
 
   const handleCreate = async () => {
     if (!company || !newVersion || !newTitle || !newContent) return;
@@ -99,6 +120,14 @@ export function PartnershipTermsTab() {
     setNewVersion("");
     setNewTitle("Termos de Parceria e Normas de Conduta");
     setNewContent(DEFAULT_TERM_TEMPLATE);
+  };
+
+  const handleActivate = (termId: string) => {
+    requirePassword(() => activateTerm.mutate(termId));
+  };
+
+  const handleDelete = (termId: string) => {
+    requirePassword(() => deleteTerm.mutate(termId));
   };
 
   const handlePreview = (term: typeof terms[0]) => {
@@ -140,7 +169,7 @@ export function PartnershipTermsTab() {
                 <Users className="h-4 w-4" />
                 Ver Aceites
               </Button>
-              <Button onClick={() => setShowCreateModal(true)} className="gap-2">
+              <Button onClick={handleCreateWithPassword} className="gap-2">
                 <Plus className="h-4 w-4" />
                 Nova Versão
               </Button>
@@ -177,7 +206,7 @@ export function PartnershipTermsTab() {
               <p className="text-sm text-muted-foreground mb-4">
                 Crie seu primeiro termo de parceria para proteger sua empresa
               </p>
-              <Button onClick={() => setShowCreateModal(true)} className="gap-2">
+              <Button onClick={handleCreateWithPassword} className="gap-2">
                 <Plus className="h-4 w-4" />
                 Criar Primeiro Termo
               </Button>
@@ -217,7 +246,7 @@ export function PartnershipTermsTab() {
                         <Button 
                           size="sm" 
                           variant="outline"
-                          onClick={() => activateTerm.mutate(term.id)}
+                          onClick={() => handleActivate(term.id)}
                           disabled={activateTerm.isPending}
                         >
                           Ativar
@@ -239,7 +268,7 @@ export function PartnershipTermsTab() {
                             <AlertDialogFooter>
                               <AlertDialogCancel>Cancelar</AlertDialogCancel>
                               <AlertDialogAction 
-                                onClick={() => deleteTerm.mutate(term.id)}
+                                onClick={() => handleDelete(term.id)}
                                 className="bg-destructive text-destructive-foreground"
                               >
                                 Remover
@@ -419,6 +448,21 @@ export function PartnershipTermsTab() {
           )}
         </DialogContent>
       </Dialog>
+
+      <DeletionPasswordDialog
+        open={passwordDialogOpen}
+        onOpenChange={setPasswordDialogOpen}
+        onVerify={async (password) => {
+          const valid = await verifyDeletionPassword(password);
+          if (valid && pendingAction) {
+            pendingAction();
+            setPendingAction(null);
+          }
+          return valid;
+        }}
+        title="Senha de Segurança"
+        description="Digite a senha de segurança para gerenciar os termos de parceria."
+      />
     </div>
   );
 }

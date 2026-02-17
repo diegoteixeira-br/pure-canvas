@@ -7,14 +7,28 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useBusinessSettings } from "@/hooks/useBusinessSettings";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DeletionPasswordDialog } from "@/components/shared/DeletionPasswordDialog";
 
 export function FinancialFeesTab() {
-  const { settings, isLoading, updateSettings } = useBusinessSettings();
+  const { settings, isLoading, updateSettings, verifyDeletionPassword } = useBusinessSettings();
   
   const [debitFee, setDebitFee] = useState("1.50");
   const [creditFee, setCreditFee] = useState("3.00");
   const [calculationBase, setCalculationBase] = useState<"gross" | "net">("gross");
   const [isSaving, setIsSaving] = useState(false);
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+
+  const isDeletionPasswordActive = !!settings?.deletion_password_enabled && !!settings?.deletion_password_hash;
+
+  const requirePassword = (action: () => void) => {
+    if (isDeletionPasswordActive) {
+      setPendingAction(() => action);
+      setPasswordDialogOpen(true);
+    } else {
+      action();
+    }
+  };
 
   useEffect(() => {
     if (settings) {
@@ -24,17 +38,19 @@ export function FinancialFeesTab() {
     }
   }, [settings]);
 
-  const handleSave = async () => {
-    setIsSaving(true);
-    try {
-      await updateSettings.mutateAsync({
-        debit_card_fee_percent: parseFloat(debitFee) || 1.50,
-        credit_card_fee_percent: parseFloat(creditFee) || 3.00,
-        commission_calculation_base: calculationBase,
-      });
-    } finally {
-      setIsSaving(false);
-    }
+  const handleSave = () => {
+    requirePassword(async () => {
+      setIsSaving(true);
+      try {
+        await updateSettings.mutateAsync({
+          debit_card_fee_percent: parseFloat(debitFee) || 1.50,
+          credit_card_fee_percent: parseFloat(creditFee) || 3.00,
+          commission_calculation_base: calculationBase,
+        });
+      } finally {
+        setIsSaving(false);
+      }
+    });
   };
 
   if (isLoading) {
@@ -175,6 +191,21 @@ export function FinancialFeesTab() {
           {isSaving ? "Salvando..." : "Salvar Alterações"}
         </Button>
       </div>
+
+      <DeletionPasswordDialog
+        open={passwordDialogOpen}
+        onOpenChange={setPasswordDialogOpen}
+        onVerify={async (password) => {
+          const valid = await verifyDeletionPassword(password);
+          if (valid && pendingAction) {
+            pendingAction();
+            setPendingAction(null);
+          }
+          return valid;
+        }}
+        title="Senha de Segurança"
+        description="Digite a senha de segurança para alterar as taxas e configurações financeiras."
+      />
     </div>
   );
 }
