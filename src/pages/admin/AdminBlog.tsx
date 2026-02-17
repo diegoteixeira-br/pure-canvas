@@ -5,17 +5,21 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Plus, Pencil, Trash2, FileText } from "lucide-react";
+import { Plus, Pencil, Trash2, FileText, Download } from "lucide-react";
 import { useBlogPosts, type BlogPost } from "@/hooks/useBlogPosts";
 import { BlogPostFormModal } from "@/components/admin/BlogPostFormModal";
+import { blogPosts as staticPosts } from "@/data/blogPosts";
+import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { toast } from "sonner";
 
 export default function AdminBlog() {
   const { posts, isLoading, createPost, updatePost, deletePost } = useBlogPosts();
   const [formOpen, setFormOpen] = useState(false);
   const [editingPost, setEditingPost] = useState<BlogPost | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const handleSave = (data: any) => {
     if (data.id) {
@@ -35,6 +39,45 @@ export default function AdminBlog() {
     setFormOpen(true);
   };
 
+  const handleImportLegacy = async () => {
+    setImporting(true);
+    try {
+      const existingSlugs = posts.map(p => p.slug);
+      const toImport = staticPosts.filter(sp => !existingSlugs.includes(sp.slug));
+      
+      if (toImport.length === 0) {
+        toast.info("Todos os artigos legados já foram importados.");
+        setImporting(false);
+        return;
+      }
+
+      const rows = toImport.map(sp => ({
+        slug: sp.slug,
+        title: sp.title,
+        excerpt: sp.excerpt,
+        content: sp.content.trim(),
+        category: sp.category,
+        image_url: sp.image,
+        read_time: sp.readTime,
+        author: sp.author,
+      }));
+
+      const { error } = await supabase.from("blog_posts" as any).insert(rows as any);
+      if (error) throw error;
+
+      toast.success(`${toImport.length} artigo(s) importado(s) com sucesso!`);
+      // Refresh the list
+      window.location.reload();
+    } catch (err: any) {
+      toast.error("Erro ao importar: " + err.message);
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const legacySlugs = staticPosts.map(sp => sp.slug);
+  const hasUnimportedLegacy = legacySlugs.some(slug => !posts.map(p => p.slug).includes(slug));
+
   const confirmDelete = () => {
     if (deleteId) {
       deletePost.mutate(deleteId);
@@ -50,10 +93,18 @@ export default function AdminBlog() {
             <h1 className="text-2xl font-bold text-white">Gerenciador de Blog</h1>
             <p className="text-slate-400">Crie e gerencie artigos do blog com IA</p>
           </div>
-          <Button onClick={handleNew} className="gap-2">
-            <Plus className="h-4 w-4" />
-            Novo Artigo
-          </Button>
+          <div className="flex gap-2">
+            {hasUnimportedLegacy && (
+              <Button onClick={handleImportLegacy} variant="outline" className="gap-2" disabled={importing}>
+                <Download className="h-4 w-4" />
+                {importing ? "Importando..." : "Importar Legados"}
+              </Button>
+            )}
+            <Button onClick={handleNew} className="gap-2">
+              <Plus className="h-4 w-4" />
+              Novo Artigo
+            </Button>
+          </div>
         </div>
 
         <Card className="bg-slate-800 border-slate-700">
