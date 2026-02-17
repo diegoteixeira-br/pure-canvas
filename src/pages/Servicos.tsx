@@ -4,8 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Plus, Scissors, Loader2, Clock, Check } from "lucide-react";
 import { useServices, Service } from "@/hooks/useServices";
 import { useCurrentUnit } from "@/contexts/UnitContext";
+import { useBusinessSettings } from "@/hooks/useBusinessSettings";
 import { ServiceCard } from "@/components/services/ServiceCard";
 import { ServiceFormModal } from "@/components/services/ServiceFormModal";
+import { DeletionPasswordDialog } from "@/components/shared/DeletionPasswordDialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
@@ -23,15 +25,36 @@ const EXAMPLE_SERVICES = [
 export default function Servicos() {
   const { currentUnitId, isLoading: unitLoading } = useCurrentUnit();
   const { services, isLoading, createService, updateService, deleteService } = useServices(currentUnitId);
+  const { settings, verifyDeletionPassword } = useBusinessSettings();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [selectedExamples, setSelectedExamples] = useState<Set<string>>(new Set());
   const [isSavingExamples, setIsSavingExamples] = useState(false);
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+
+  const isDeletionPasswordActive = !!settings?.deletion_password_enabled && !!settings?.deletion_password_hash;
+
+  const requirePassword = (action: () => void) => {
+    if (isDeletionPasswordActive) {
+      setPendingAction(() => action);
+      setPasswordDialogOpen(true);
+    } else {
+      action();
+    }
+  };
 
   const handleOpenModal = (service?: Service) => {
-    setEditingService(service || null);
-    setIsModalOpen(true);
+    if (service) {
+      requirePassword(() => {
+        setEditingService(service);
+        setIsModalOpen(true);
+      });
+    } else {
+      setEditingService(null);
+      setIsModalOpen(true);
+    }
   };
 
   const handleCloseModal = () => {
@@ -52,7 +75,9 @@ export default function Servicos() {
   };
 
   const handleDelete = (id: string) => {
-    deleteService.mutate(id);
+    requirePassword(() => {
+      deleteService.mutate(id);
+    });
   };
 
   const toggleExampleSelection = (name: string) => {
@@ -215,6 +240,21 @@ export default function Servicos() {
         service={editingService}
         onSubmit={handleSubmit}
         isLoading={createService.isPending || updateService.isPending}
+      />
+
+      <DeletionPasswordDialog
+        open={passwordDialogOpen}
+        onOpenChange={setPasswordDialogOpen}
+        onVerify={async (password) => {
+          const valid = await verifyDeletionPassword(password);
+          if (valid && pendingAction) {
+            pendingAction();
+            setPendingAction(null);
+          }
+          return valid;
+        }}
+        title="Senha de Segurança"
+        description="Digite a senha de segurança para editar ou excluir este serviço."
       />
     </DashboardLayout>
   );

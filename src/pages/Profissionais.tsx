@@ -7,8 +7,10 @@ import { useUnits } from "@/hooks/useUnits";
 import { useCurrentUnit } from "@/contexts/UnitContext";
 import { useCompany } from "@/hooks/useCompany";
 import { usePartnershipTerms, useTermAcceptances } from "@/hooks/usePartnershipTerms";
+import { useBusinessSettings } from "@/hooks/useBusinessSettings";
 import { BarberCard } from "@/components/barbers/BarberCard";
 import { BarberFormModal } from "@/components/barbers/BarberFormModal";
+import { DeletionPasswordDialog } from "@/components/shared/DeletionPasswordDialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function Profissionais() {
@@ -17,19 +19,41 @@ export default function Profissionais() {
   const { company } = useCompany();
   const { activeTerm } = usePartnershipTerms(company?.id || null);
   const { acceptances } = useTermAcceptances(company?.id || null);
+  const { settings, verifyDeletionPassword } = useBusinessSettings();
   const [unitFilter, setUnitFilter] = useState<string>("current");
   
-  // Determine the unit ID to use for fetching barbers
   const effectiveUnitId = unitFilter === "all" ? null : (unitFilter === "current" ? currentUnitId : unitFilter);
   
   const { barbers, isLoading, createBarber, updateBarber, deleteBarber, toggleActive, generateInviteToken } = useBarbers(effectiveUnitId);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingBarber, setEditingBarber] = useState<Barber | null>(null);
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+
+  const isDeletionPasswordActive = !!settings?.deletion_password_enabled && !!settings?.deletion_password_hash;
+
+  const requirePassword = (action: () => void) => {
+    if (isDeletionPasswordActive) {
+      setPendingAction(() => action);
+      setPasswordDialogOpen(true);
+    } else {
+      action();
+    }
+  };
 
   const handleOpenModal = (barber?: Barber) => {
-    setEditingBarber(barber || null);
-    setIsModalOpen(true);
+    if (barber) {
+      // Editing existing - require password
+      requirePassword(() => {
+        setEditingBarber(barber);
+        setIsModalOpen(true);
+      });
+    } else {
+      // Creating new - no password needed
+      setEditingBarber(null);
+      setIsModalOpen(true);
+    }
   };
 
   const handleCloseModal = () => {
@@ -50,7 +74,9 @@ export default function Profissionais() {
   };
 
   const handleDelete = (id: string) => {
-    deleteBarber.mutate(id);
+    requirePassword(() => {
+      deleteBarber.mutate(id);
+    });
   };
 
   const handleToggleActive = (id: string, is_active: boolean) => {
@@ -92,7 +118,6 @@ export default function Profissionais() {
           </Button>
         </div>
 
-        {/* Unit Filter */}
         {units.length > 1 && (
           <div className="flex items-center gap-3">
             <Select value={unitFilter} onValueChange={setUnitFilter}>
@@ -166,6 +191,21 @@ export default function Profissionais() {
         isLoading={createBarber.isPending || updateBarber.isPending}
         units={units}
         defaultUnitId={unitFilter !== "all" && unitFilter !== "current" ? unitFilter : currentUnitId || undefined}
+      />
+
+      <DeletionPasswordDialog
+        open={passwordDialogOpen}
+        onOpenChange={setPasswordDialogOpen}
+        onVerify={async (password) => {
+          const valid = await verifyDeletionPassword(password);
+          if (valid && pendingAction) {
+            pendingAction();
+            setPendingAction(null);
+          }
+          return valid;
+        }}
+        title="Senha de Segurança"
+        description="Digite a senha de segurança para editar ou excluir este profissional."
       />
     </DashboardLayout>
   );
