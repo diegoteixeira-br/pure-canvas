@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Badge } from "@/components/ui/badge";
 import { useSaasSettings } from "@/hooks/useSaasSettings";
+import { supabase } from "@/integrations/supabase/client";
 import { CreditCard, Eye, EyeOff, CheckCircle, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
@@ -23,43 +24,74 @@ export function StripeSettingsCard() {
   const [showLiveSecret, setShowLiveSecret] = useState(false);
   const [showWebhookSecret, setShowWebhookSecret] = useState(false);
 
+  const [maskedKeys, setMaskedKeys] = useState<Record<string, any>>({});
+  const [loadingKeys, setLoadingKeys] = useState(true);
+
+  // Load stripe mode from non-sensitive settings
   useEffect(() => {
     if (settings) {
       setStripeMode(settings.stripe_mode || "test");
-      setTestPublishableKey(settings.stripe_test_publishable_key || "");
-      setTestSecretKey(settings.stripe_test_secret_key || "");
-      setLivePublishableKey(settings.stripe_live_publishable_key || "");
-      setLiveSecretKey(settings.stripe_live_secret_key || "");
-      setWebhookSecret(settings.stripe_webhook_secret || "");
     }
   }, [settings]);
 
-  const handleSave = () => {
-    updateSettings({
-      stripe_mode: stripeMode,
-      stripe_test_publishable_key: testPublishableKey,
-      stripe_test_secret_key: testSecretKey,
-      stripe_live_publishable_key: livePublishableKey,
-      stripe_live_secret_key: liveSecretKey,
-      stripe_webhook_secret: webhookSecret,
-    });
+  // Load masked keys from edge function
+  useEffect(() => {
+    async function loadKeys() {
+      try {
+        const { data, error } = await supabase.functions.invoke("manage-stripe-keys", {
+          body: { action: "get" },
+        });
+        if (error) throw error;
+        setMaskedKeys(data);
+        setTestPublishableKey(data.stripe_test_publishable_key || "");
+        setLivePublishableKey(data.stripe_live_publishable_key || "");
+      } catch (err) {
+        console.error("Error loading stripe keys:", err);
+      } finally {
+        setLoadingKeys(false);
+      }
+    }
+    loadKeys();
+  }, []);
+
+  const handleSave = async () => {
+    // Save non-sensitive settings via client
+    updateSettings({ stripe_mode: stripeMode });
+
+    // Save secret keys via edge function
+    try {
+      const payload: Record<string, any> = {
+        action: "save",
+        stripe_test_publishable_key: testPublishableKey,
+        stripe_live_publishable_key: livePublishableKey,
+      };
+      // Only send secret keys if user typed a new value (not masked)
+      if (testSecretKey && !testSecretKey.includes("••••")) payload.stripe_test_secret_key = testSecretKey;
+      if (liveSecretKey && !liveSecretKey.includes("••••")) payload.stripe_live_secret_key = liveSecretKey;
+      if (webhookSecret && !webhookSecret.includes("••••")) payload.stripe_webhook_secret = webhookSecret;
+
+      const { error } = await supabase.functions.invoke("manage-stripe-keys", { body: payload });
+      if (error) throw error;
+      toast.success("Chaves Stripe salvas com segurança");
+      // Reset secret fields to masked
+      setTestSecretKey("");
+      setLiveSecretKey("");
+      setWebhookSecret("");
+      // Reload masked keys
+      const { data } = await supabase.functions.invoke("manage-stripe-keys", { body: { action: "get" } });
+      if (data) setMaskedKeys(data);
+    } catch (err) {
+      toast.error("Erro ao salvar chaves Stripe");
+    }
   };
 
   const testConnection = async () => {
-    const keyToTest = stripeMode === "test" ? testSecretKey : liveSecretKey;
-    
-    if (!keyToTest) {
-      toast.error("Configure a chave secreta primeiro");
-      return;
-    }
-
-    // In a real implementation, this would call an edge function to test the Stripe connection
     toast.info("Funcionalidade de teste será implementada via Edge Function");
   };
 
   const isConfigured = stripeMode === "test" 
-    ? !!(testPublishableKey && testSecretKey)
-    : !!(livePublishableKey && liveSecretKey);
+    ? !!(testPublishableKey && maskedKeys.has_test_secret)
+    : !!(livePublishableKey && maskedKeys.has_live_secret);
 
   return (
     <Card className="bg-slate-800 border-slate-700">
@@ -122,7 +154,7 @@ export function StripeSettingsCard() {
                   type={showTestSecret ? "text" : "password"}
                   value={testSecretKey}
                   onChange={(e) => setTestSecretKey(e.target.value)}
-                  placeholder="sk_test_..."
+                  placeholder={maskedKeys.has_test_secret ? maskedKeys.stripe_test_secret_key_masked : "sk_test_..."}
                   className="bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 pr-10"
                 />
                 <button
@@ -156,7 +188,7 @@ export function StripeSettingsCard() {
                   type={showLiveSecret ? "text" : "password"}
                   value={liveSecretKey}
                   onChange={(e) => setLiveSecretKey(e.target.value)}
-                  placeholder="sk_live_..."
+                  placeholder={maskedKeys.has_live_secret ? maskedKeys.stripe_live_secret_key_masked : "sk_live_..."}
                   className="bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 pr-10"
                 />
                 <button
@@ -178,7 +210,7 @@ export function StripeSettingsCard() {
               type={showWebhookSecret ? "text" : "password"}
               value={webhookSecret}
               onChange={(e) => setWebhookSecret(e.target.value)}
-              placeholder="whsec_..."
+              placeholder={maskedKeys.has_webhook_secret ? maskedKeys.stripe_webhook_secret_masked : "whsec_..."}
               className="bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 pr-10"
             />
             <button

@@ -217,6 +217,9 @@ serve(async (req) => {
       );
     }
 
+    // Also validate per-unit API key if provided via x-unit-api-key header
+    const unitApiKey = req.headers.get('x-unit-api-key');
+
     const body = await req.json();
     const { action, instance_name } = body;
 
@@ -284,6 +287,18 @@ serve(async (req) => {
         JSON.stringify({ success: false, error: 'É necessário fornecer instance_name ou unit_id' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    // Validate per-unit API key if the unit has one configured
+    if (validatedUnit?.evolution_api_key && unitApiKey) {
+      if (unitApiKey !== validatedUnit.evolution_api_key) {
+        console.error('Invalid unit API key for unit:', resolvedUnitId);
+        return new Response(
+          JSON.stringify({ success: false, error: 'Chave de API da unidade inválida' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      console.log('Unit-level API key validated successfully');
     }
 
     // Passar o unit_id resolvido para os handlers (inclui credenciais Evolution da unidade validada)

@@ -55,9 +55,10 @@ export function useSaasSettings() {
   const settingsQuery = useQuery({
     queryKey: ["saas-settings"],
     queryFn: async (): Promise<SaasSettings | null> => {
+      // Only select non-sensitive columns - secret keys are managed server-side
       const { data, error } = await supabase
         .from("saas_settings")
-        .select("*")
+        .select("id, stripe_mode, default_trial_days, professional_plan_price, elite_plan_price, empire_plan_price, inicial_plan_price, inicial_plan_annual_price, profissional_plan_price, profissional_plan_annual_price, franquias_plan_price, franquias_plan_annual_price, annual_discount_percent, meta_pixel_id, google_tag_id, google_conversion_id, tiktok_pixel_id, maintenance_mode, maintenance_message, updated_at, updated_by")
         .limit(1)
         .maybeSingle();
       
@@ -83,10 +84,13 @@ export function useSaasSettings() {
     mutationFn: async (updates: Partial<SaasSettings>) => {
       const { data: { user } } = await supabase.auth.getUser();
       
+      // Remove secret fields - those are managed via edge function
+      const { stripe_test_secret_key, stripe_live_secret_key, stripe_webhook_secret, stripe_test_publishable_key, stripe_live_publishable_key, ...safeUpdates } = updates as any;
+
       const { error } = await supabase
         .from("saas_settings")
         .update({
-          ...updates,
+          ...safeUpdates,
           updated_at: new Date().toISOString(),
           updated_by: user?.id
         })

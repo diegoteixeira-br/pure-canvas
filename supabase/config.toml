@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.blog-share]
 verify_jwt = false
+
+[functions.manage-stripe-keys]
+verify_jwt = false
