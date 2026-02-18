@@ -613,7 +613,7 @@ export const DemoTourModal = ({ open, onOpenChange }: DemoTourModalProps) => {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            apikey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxncnVncHN5ZXd2aW5sa2dtZXZlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0NzUwMDIsImV4cCI6MjA4NjA1MTAwMn0.DHvyTlG1O0EyA3ajkx7dUrmJD_BmUtjFogo3NhL9b_U",
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
           },
           body: JSON.stringify({ 
             slideIndex,
