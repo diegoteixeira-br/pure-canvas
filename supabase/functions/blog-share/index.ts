@@ -107,7 +107,6 @@ serve(async (req) => {
     }
 
     const articleUrl = `${SITE_URL}/blog/${post.slug}`;
-    const edgeFunctionUrl = `https://lgrugpsyewvinlkgmeve.supabase.co/functions/v1/blog-share?slug=${post.slug}`;
     const fullTitle = `${post.title} | ${SITE_NAME}`;
     const imageUrl = post.image || FALLBACK_IMAGE;
 
@@ -137,7 +136,7 @@ serve(async (req) => {
   <meta name="description" content="${post.excerpt}">
   
   <meta property="og:type" content="article">
-  <meta property="og:url" content="${edgeFunctionUrl}">
+  <meta property="og:url" content="${articleUrl}">
   <meta property="og:title" content="${post.title}">
   <meta property="og:description" content="${post.excerpt}">
   <meta property="og:image" content="${imageUrl}">
@@ -151,7 +150,7 @@ serve(async (req) => {
   <meta property="og:locale" content="pt_BR">
   
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:url" content="${edgeFunctionUrl}">
+  <meta name="twitter:url" content="${articleUrl}">
   <meta name="twitter:title" content="${post.title}">
   <meta name="twitter:description" content="${post.excerpt}">
   <meta name="twitter:image" content="${imageUrl}">
