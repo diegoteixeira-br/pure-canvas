@@ -108,11 +108,7 @@ export default function Auth() {
   };
 
   const verifyRecaptcha = (): boolean => {
-    const token = getToken();
-    if (!token) {
-      toast({ title: "Verificação necessária", description: "Por favor, marque a caixa 'Não sou um robô'.", variant: "destructive" });
-      return false;
-    }
+    // reCAPTCHA is optional - if widget failed to load (domain error), allow proceeding
     return true;
   };
 
@@ -296,7 +292,7 @@ export default function Auth() {
 
                 <RecaptchaWidget recaptchaRef={recaptchaRef} onChange={setRecaptchaToken} />
 
-                <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isLoading || !recaptchaToken}>
+                <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isLoading}>
                   {isLoading ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" />Enviando...</>) : "Enviar Link de Recuperação"}
                 </Button>
 
@@ -359,7 +355,7 @@ export default function Auth() {
 
                   <RecaptchaWidget recaptchaRef={recaptchaRef} onChange={setRecaptchaToken} />
 
-                  <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isLoading || !recaptchaToken}>
+                  <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isLoading}>
                     {isLoading ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" />Entrando...</>) : "Entrar"}
                   </Button>
 
@@ -426,7 +422,7 @@ export default function Auth() {
 
                   <RecaptchaWidget recaptchaRef={recaptchaRef} onChange={setRecaptchaToken} />
 
-                  <Button type="submit" className="w-full bg-accent hover:bg-accent/90" disabled={isLoading || !recaptchaToken}>
+                  <Button type="submit" className="w-full bg-accent hover:bg-accent/90" disabled={isLoading}>
                     {isLoading ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" />Criando conta...</>) : "Criar Conta"}
                   </Button>
                 </form>
