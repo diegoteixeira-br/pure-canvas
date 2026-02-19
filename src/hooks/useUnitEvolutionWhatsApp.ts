@@ -36,10 +36,15 @@ export function useUnitEvolutionWhatsApp(unit: Unit | null): UseUnitEvolutionWha
   const [profile, setProfile] = useState<WhatsAppProfile | null>(null);
   const [currentInstanceName, setCurrentInstanceName] = useState<string | null>(null);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const quickCheckRef = useRef<NodeJS.Timeout | null>(null);
   const isCreatingRef = useRef(false);
   const previousUnitIdRef = useRef<string | null>(null);
 
   const stopPolling = useCallback(() => {
+    if (quickCheckRef.current) {
+      clearTimeout(quickCheckRef.current);
+      quickCheckRef.current = null;
+    }
     if (pollingRef.current) {
       clearInterval(pollingRef.current);
       pollingRef.current = null;
@@ -152,10 +157,14 @@ export function useUnitEvolutionWhatsApp(unit: Unit | null): UseUnitEvolutionWha
 
   const startPolling = useCallback(() => {
     stopPolling();
-    pollingRef.current = setInterval(() => {
-      // Pass true to auto-refresh QR if missing
+    // First check after 1s for quick detection
+    quickCheckRef.current = setTimeout(() => {
       checkStatus(true);
-    }, 3000);
+    }, 1000);
+    // Then every 2s
+    pollingRef.current = setInterval(() => {
+      checkStatus(true);
+    }, 2000);
   }, [checkStatus, stopPolling]);
 
   const createInstance = useCallback(async () => {
@@ -281,7 +290,6 @@ export function useUnitEvolutionWhatsApp(unit: Unit | null): UseUnitEvolutionWha
   const refreshQRCode = useCallback(async () => {
     if (!unit?.id) return;
 
-    setIsLoading(true);
     setError(null);
 
     try {
@@ -306,11 +314,6 @@ export function useUnitEvolutionWhatsApp(unit: Unit | null): UseUnitEvolutionWha
 
       setQrCode(data.qrCode);
       setPairingCode(data.pairingCode);
-
-      toast({
-        title: "QR Code atualizado!",
-        description: "Escaneie novamente para conectar.",
-      });
     } catch (err) {
       console.error('Refresh QR error:', err);
       const message = err instanceof Error ? err.message : 'Erro desconhecido';
@@ -320,8 +323,6 @@ export function useUnitEvolutionWhatsApp(unit: Unit | null): UseUnitEvolutionWha
         description: message,
         variant: "destructive",
       });
-    } finally {
-      setIsLoading(false);
     }
   }, [unit?.id, toast]);
 
