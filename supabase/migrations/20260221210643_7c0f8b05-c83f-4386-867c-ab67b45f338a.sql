@@ -1,0 +1,1 @@
+DELETE FROM units WHERE id = '5eb1d449-a727-48ce-9f4b-6a53170cb753'
